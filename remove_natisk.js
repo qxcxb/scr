@@ -148,7 +148,8 @@
   waitForElement('body > div.scroller > container > div', async () => {
     cleanNatiskPage();
 
-    const patchName = (document.querySelector('.ver_text_name')?.textContent || '').trim();
+    const patchName = (document.querySelector('body > div.scroller > container > div > div > div.card_2 > p:nth-child(1)')?.textContent || '').trim();
+
     let publicUrl = '';
 
     if (DO_SCREENSHOT) {
