@@ -56,13 +56,15 @@
     const ctx = out.getContext('2d');
     const rw = base.width, rh = base.height;
     // cover-кадрирование по центру
-    const sRatio = Math.max(1080 / rw, 1080 / rh);
-    const sw = Math.round(1080 / sRatio);
-    const sh = Math.round(1080 / sRatio);
-    const sx = Math.max(0, Math.floor((rw - sw) / 2));
-    const sy = Math.max(0, Math.floor((rh - sh) / 2));
-    ctx.drawImage(base, sx, sy, sw, sh, 0, 0, 1080, 1080);
-
+    const sRatio = Math.min(1080 / rw, 1080 / rh); // <= ВОТ тут min вместо max
+    const dw = Math.round(rw * sRatio);
+    const dh = Math.round(rh * sRatio);
+    const dx = Math.floor((1080 - dw) / 2);
+    const dy = Math.floor((1080 - dh) / 2);
+    
+    ctx.fillStyle = 'white'; // фон, можно убрать
+    ctx.fillRect(0, 0, 1080, 1080);
+    ctx.drawImage(base, 0, 0, rw, rh, dx, dy, dw, dh);
     const blob = await new Promise(r => out.toBlob(r, 'image/png'));
     const fileId = await uploadToDrive(blob, `abyss_${patchName || 'unknown'}_${Date.now()}.png`, TOKEN);
     await makePublic(fileId, TOKEN);
