@@ -47,7 +47,9 @@
       // новые
       '.toggle_3.mon_buffs.sw_3_2',
       'p.avd.tip_3',
-      'h3:has(.title)'
+      'h3:has(.title)',
+      'body > div.scroller > container > div > div > div:nth-child(4)',
+      'body > div.scroller > container > div > div > div:nth-child(5)'
     ];
 
     selectorsToRemove.forEach(sel => {
