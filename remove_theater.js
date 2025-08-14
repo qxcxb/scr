@@ -59,11 +59,6 @@
       }
     }
 
-    // ==== МАСШТАБ ====
-    document.body.style.transform = "scale(1.5)";
-    document.body.style.transformOrigin = "top left";
-    document.body.style.width = (100 / 1.5) + "%";
-
     // ==== УДАЛЕНИЕ ЛИШНЕГО ====
     const selectors = [
       'section.typ',
@@ -164,8 +159,13 @@
     if (DO_SCREENSHOT) {
       await ensureHtml2Canvas();
       const target = document.querySelector('body > div.scroller > container > div') || document.body;
-      const base = await html2canvas(target, { scale: 2, useCORS: true, backgroundColor: null });
-
+      
+      const base = await html2canvas(target, { 
+        scale: 3, // ← увеличивает и текст, и картинки
+        useCORS: true, 
+        backgroundColor: null 
+      });
+    
       const out = document.createElement('canvas');
       out.width = 1080; out.height = 1080;
       const ctx = out.getContext('2d');
@@ -175,21 +175,15 @@
       const dh = Math.round(rh * sRatio);
       const dx = Math.floor((1080 - dw) / 2);
       const dy = Math.floor((1080 - dh) / 2);
-
+    
       ctx.fillStyle = 'white';
       ctx.fillRect(0, 0, 1080, 1080);
       ctx.drawImage(base, 0, 0, rw, rh, dx, dy, dw, dh);
-
+    
       const blob = await new Promise(r => out.toBlob(r, 'image/png'));
       const fileId = await uploadToDrive(blob, `theater_${patchName || 'unknown'}_${Date.now()}.png`, TOKEN);
       await makePublic(fileId, TOKEN);
       publicUrl = `https://drive.google.com/uc?id=${fileId}`;
-    }
-
-    if (patchName && publicUrl) {
-      const row = await findRowByPatch(SHEETS_ID, 'Theater', patchName, TOKEN);
-      if (row) await updateCell(SHEETS_ID, `Theater!D${row}`, [[publicUrl]], TOKEN);
-      else await appendRow(SHEETS_ID, 'Theater!A:D', [[patchName, '', '', publicUrl]], TOKEN);
     }
   });
 })();
