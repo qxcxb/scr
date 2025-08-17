@@ -23,8 +23,10 @@
   }
 
   const TOKEN = await getAccessToken();
-  const SHEETS_ID = window.SHEETS_ID || '1XLo39UfRJWXESFTBSJKa4hPO0S7XOjKounKeb2QNus8';
+  const SHEETS_ID   = window.SHEETS_ID   || '1XLo39UfRJWXESFTBSJKa4hPO0S7XOjKounKeb2QNus8';
+  const SHEET_NAME  = window.SHEET_NAME  || 'Лист1';
   const DO_SCREENSHOT = window.DO_SCREENSHOT !== false;
+  const SCREEN_SCALE  = Number(window.SCREEN_SCALE || 1.5); // ← масштаб текста
 
   function waitForElement(selector, cb) {
     const el = document.querySelector(selector);
@@ -38,6 +40,7 @@
 
   // ======== Чистка страницы Theater и формат даты ========
   function cleanTheaterPage() {
+    // Работа с датой формата YYYY/MM
     const monthElem = document.querySelector(
       'div.blessing_card_area > div > p:nth-child(2)'
     );
@@ -58,6 +61,7 @@
       }
     }
 
+    // ==== УДАЛЕНИЕ ЛИШНЕГО ====
     const selectors = [
       'section.typ',
       'p.avd.tip_3',
@@ -71,7 +75,6 @@
       'body > div.scroller > container > div > div.blessing_card_area > div:nth-child(4)',
       'body > div.scroller > container > div > div.blessing_card_area > div:nth-child(5)'
     ];
-
     selectors.forEach(sel => {
       document.querySelectorAll(sel).forEach(el => el.remove());
     });
@@ -147,36 +150,86 @@
     if (!r.ok) throw new Error('Sheets append failed');
   }
 
+  // ——— вспомогательное: увеличение шрифтов в клон-DOM ———
+  function bumpFontsInClone(doc, root, scale) {
+    try {
+      const win = doc.defaultView;
+      const all = root.querySelectorAll('*');
+      for (let i = 0; i < all.length; i++) {
+        const el = all[i];
+        const cs = win.getComputedStyle(el);
+
+        // font-size
+        const fs = parseFloat(cs.fontSize);
+        if (!Number.isNaN(fs) && cs.fontSize.endsWith('px')) {
+          el.style.fontSize = (fs * scale) + 'px';
+        }
+
+        // line-height (если в px)
+        const lh = cs.lineHeight;
+        if (lh && lh.endsWith && lh.endsWith('px')) {
+          const lhPx = parseFloat(lh);
+          if (!Number.isNaN(lhPx)) el.style.lineHeight = (lhPx * scale) + 'px';
+        }
+
+        // letter-spacing (если в px)
+        const ls = cs.letterSpacing;
+        if (ls && ls.endsWith && ls.endsWith('px')) {
+          const lsPx = parseFloat(ls);
+          if (!Number.isNaN(lsPx)) el.style.letterSpacing = (lsPx * scale) + 'px';
+        }
+      }
+    } catch(e) {
+      console.warn('bumpFontsInClone error:', e);
+    }
+  }
+
   waitForElement('body > div.scroller > container > div', async () => {
-    cleanTheaterPage();
+    try {
+      cleanTheaterPage();
 
-    const patchName = (document.querySelector('body > div.scroller > container > div > div.blessing_card_area > div > p:nth-child(1)')?.textContent || '').trim();
+      const targetSelector = 'body > div.scroller > container > div';
+      const target = document.querySelector(targetSelector) || document.body;
 
-    if (DO_SCREENSHOT) {
+      const patchName = (document.querySelector('body > div.scroller > container > div > div.blessing_card_area > div > p:nth-child(1)')?.textContent || '').trim() || 'unknown';
+
+      if (!DO_SCREENSHOT) return;
+
       await ensureHtml2Canvas();
-      const target = document.querySelector('body > div.scroller > container > div') || document.body;
-      
-      // 🔎 Увеличиваем DOM перед скриншотом (как масштаб браузера)
-      const oldZoom = document.body.style.zoom;
-      document.body.style.zoom = "1.5"; // ← регулируй число
-    
-      await new Promise(r => setTimeout(r, 200)); // ждём перерисовку
-    
-      // снимаем скрин
-      const base = await html2canvas(target, { 
-        scale: window.devicePixelRatio || 2, 
-        useCORS: true, 
-        backgroundColor: null 
+
+      // — Снимаем скрин, увеличив ТЕКСТ в клон-DOM —
+      const base = await html2canvas(target, {
+        scale: window.devicePixelRatio || 2,
+        useCORS: true,
+        backgroundColor: null,
+        onclone: (doc) => {
+          const clonedTarget = doc.querySelector(targetSelector) || doc.body;
+          bumpFontsInClone(doc, clonedTarget, SCREEN_SCALE); // ← вот тут текст реально становится крупнее
+        }
       });
-    
-      // возвращаем масштаб обратно
-      document.body.style.zoom = oldZoom || "";
-    
-      // сохраняем как есть (без вписывания в 1080х1080)
+
+      // Сохраняем PNG
       const blob = await new Promise(r => base.toBlob(r, 'image/png'));
-      const fileId = await uploadToDrive(blob, `theater_${patchName || 'unknown'}_${Date.now()}.png`, TOKEN);
+      const fileId = await uploadToDrive(blob, `theater_${patchName}_${Date.now()}.png`, TOKEN);
       await makePublic(fileId, TOKEN);
+      const publicUrl = `https://drive.google.com/uc?id=${fileId}`;
+
+      // — Запись в Google Sheets —
+      const row = await findRowByPatch(SHEETS_ID, SHEET_NAME, patchName, TOKEN);
+      const ts = new Date().toISOString();
+
+      if (row > 0) {
+        // Обновляем B (URL) и C (timestamp)
+        await updateCell(SHEETS_ID, `${SHEET_NAME}!B${row}:C${row}`, [[publicUrl, ts]], TOKEN);
+      } else {
+        // Добавляем новую строку: A=patch, B=URL, C=time
+        await appendRow(SHEETS_ID, `${SHEET_NAME}!A:C`, [[patchName, publicUrl, ts]], TOKEN);
+      }
+
+      // Если хочешь видеть ссылку в консоли
+      console.log('Public screenshot URL:', publicUrl);
+    } catch (e) {
+      console.error('Screenshot pipeline failed:', e);
     }
   });
 })();
-
