@@ -156,22 +156,22 @@
       await ensureHtml2Canvas();
       const target = document.querySelector('body > div.scroller > container > div') || document.body;
       
-      // 🔎 Увеличиваем DOM перед скриншотом
-      target.style.transform = 'scale(1.5)';   // увеличь число для ещё большего масштаба
-      target.style.transformOrigin = 'top left';
-      
+      // 🔎 Увеличиваем DOM перед скриншотом (как масштаб браузера)
+      const oldZoom = document.body.style.zoom;
+      document.body.style.zoom = "1.5"; // ← регулируй число
+    
       await new Promise(r => setTimeout(r, 200)); // ждём перерисовку
-
+    
       // снимаем скрин
       const base = await html2canvas(target, { 
         scale: window.devicePixelRatio || 2, 
         useCORS: true, 
         backgroundColor: null 
       });
-
-      // возвращаем обратно
-      target.style.transform = '';
-
+    
+      // возвращаем масштаб обратно
+      document.body.style.zoom = oldZoom || "";
+    
       // сохраняем как есть (без вписывания в 1080х1080)
       const blob = await new Promise(r => base.toBlob(r, 'image/png'));
       const fileId = await uploadToDrive(blob, `theater_${patchName || 'unknown'}_${Date.now()}.png`, TOKEN);
