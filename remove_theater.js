@@ -24,12 +24,14 @@
     return j.access_token;
   }
 
-  const TOKEN       = await getAccessToken();
-  const SHEETS_ID   = window.SHEETS_ID   || '1XLo39UfRJWXESFTBSJKa4hPO0S7XOjKounKeb2QNus8';
-  const SHEET_NAME  = window.SHEET_NAME  || 'Лист1';
+  const TOKEN        = await getAccessToken();
+  const SHEETS_ID    = window.SHEETS_ID   || '1XLo39UfRJWXESFTBSJKa4hPO0S7XOjKounKeb2QNus8';
+  const SHEET_NAME   = window.SHEET_NAME  || 'Лист1';
   const DO_SCREENSHOT = window.DO_SCREENSHOT !== false;
 
-  const ZOOM = window.ZOOM || 1.5; // ← регулируй масштаб «как в браузере»
+  // масштаб как «150% в браузере»
+  const ZOOM = window.ZOOM || 1.5;           // поменяй при необходимости
+  const TEXT_SCALE = window.TEXT_SCALE || 1; // опционально: 0.9, 0.8 и т.п. чтобы слегка ужать шрифты
 
   function waitForElement(selector, cb) {
     const el = document.querySelector(selector);
@@ -43,7 +45,6 @@
 
   // ======== Чистка страницы Theater и формат даты ========
   function cleanTheaterPage() {
-    // Работа с датой формата YYYY/MM
     const monthElem = document.querySelector('div.blessing_card_area > div > p:nth-child(2)');
     if (monthElem) {
       const t = monthElem.textContent.trim();
@@ -60,8 +61,6 @@
         monthElem.style.textAlign  = 'center';
       }
     }
-
-    // ==== УДАЛЕНИЕ ЛИШНЕГО ====
     const selectors = [
       'section.typ','p.avd.tip_3','h3','span.v_l','span.v_r',
       'div.card_2.card_toggle','div.mon_desc','p.sch_2',
@@ -146,38 +145,44 @@
     cleanTheaterPage();
 
     const patchName = (document.querySelector('body > div.scroller > container > div > div.blessing_card_area > div > p:nth-child(1)')?.textContent || '').trim();
-
     let publicUrl = '';
 
     if (DO_SCREENSHOT) {
       await ensureHtml2Canvas();
       const target = document.querySelector('body > div.scroller > container > div') || document.body;
 
-      // 🔎 Масштабируем «как браузер» — меняем zoom у body
-      const oldZoom = document.body.style.zoom;
-      document.body.style.zoom = String(ZOOM);
-      await new Promise(r => setTimeout(r, 200)); // ждём перерисовку
-
-      // Снимаем скрин
       const base = await html2canvas(target, {
-        scale: window.devicePixelRatio || 2,
+        scale: 2,
         useCORS: true,
-        backgroundColor: null
+        backgroundColor: null,
+        onclone: (doc) => {
+          // масштаб «как 150% в браузере»
+          doc.documentElement.style.zoom = String(ZOOM);
+
+          // опционально: чуть уменьшить шрифты, если «кричат»
+          if (TEXT_SCALE !== 1) {
+            doc.querySelectorAll('*').forEach(el => {
+              const cs = doc.defaultView.getComputedStyle(el);
+              if (cs && cs.fontSize && cs.fontSize.endsWith('px')) {
+                el.style.fontSize = (parseFloat(cs.fontSize) * TEXT_SCALE) + 'px';
+              }
+            });
+          }
+        }
       });
 
-      // Возвращаем масштаб обратно
-      document.body.style.zoom = oldZoom || '';
-
-      // Вписываем в квадрат 1080×1080 с белыми полями (как в твоём рабочем коде)
+      // === ВПИСЫВАНИЕ ПО COVER (без белых полей, крупнее контент) ===
       const out = document.createElement('canvas');
       out.width = 1080; out.height = 1080;
       const ctx = out.getContext('2d');
+
       const rw = base.width, rh = base.height;
-      const sRatio = Math.min(1080 / rw, 1080 / rh);
-      const dw = Math.round(rw * sRatio);
-      const dh = Math.round(rh * sRatio);
-      const dx = Math.floor((1080 - dw) / 2);
+      const coverScale = Math.max(1080 / rw, 1080 / rh); // ключевая разница
+      const dw = Math.round(rw * coverScale);
+      const dh = Math.round(rh * coverScale);
+      const dx = Math.floor((1080 - dw) / 2); // будет отрицательным — это нормально (обрезка)
       const dy = Math.floor((1080 - dh) / 2);
+
       ctx.fillStyle = 'white';
       ctx.fillRect(0, 0, 1080, 1080);
       ctx.drawImage(base, 0, 0, rw, rh, dx, dy, dw, dh);
@@ -188,7 +193,7 @@
       publicUrl = `https://drive.google.com/uc?id=${fileId}`;
     }
 
-    // 🔗 Добавляем/обновляем запись в Google Sheets (твоя механика)
+    // === Запись в таблицу (как у тебя было) ===
     if (patchName && publicUrl) {
       const row = await findRowByPatch(SHEETS_ID, SHEET_NAME, patchName, TOKEN);
       const ts = new Date().toISOString();
