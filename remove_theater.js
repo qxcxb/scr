@@ -60,9 +60,7 @@
     }
 
     // ==== МАСШТАБ ====
-    document.body.style.transform = "scale(1.5)";
-    document.body.style.transformOrigin = "top left";
-    document.body.style.width = (100 / 1.5) + "%";
+    document.body.style.zoom = "150%";
 
     // ==== УДАЛЕНИЕ ЛИШНЕГО ====
     const selectors = [
