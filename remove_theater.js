@@ -24,7 +24,7 @@
 
   // коэффициенты масштабирования
   const ELEMENT_SCALE = 1.5; // масштаб картинок/блоков
-  const TEXT_SCALE = 1.2;    // мягкий масштаб текста
+  const TEXT_SCALE = 0.1;    // мягкий масштаб текста
 
   function waitForElement(selector, cb) {
     const el = document.querySelector(selector);
@@ -186,6 +186,15 @@
       const fileId = await uploadToDrive(blob, `theater_${patchName || 'unknown'}_${Date.now()}.png`, TOKEN);
       await makePublic(fileId, TOKEN);
       publicUrl = `https://drive.google.com/uc?id=${fileId}`;
+    }
+    const row = await findRowByPatch(SHEETS_ID, SHEET_NAME, patchName, TOKEN);
+    const ts = new Date().toISOString();
+    const formula = `=IMAGE("${publicUrl}")`;
+    
+    if (row > 0) {
+      await updateCell(SHEETS_ID, `${SHEET_NAME}!B${row}:C${row}`, [[formula, ts]], TOKEN);
+    } else {
+      await appendRow(SHEETS_ID, `${SHEET_NAME}!A:C`, [[patchName, formula, ts]], TOKEN);
     }
 
     if (patchName && publicUrl) {
