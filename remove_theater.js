@@ -162,23 +162,25 @@
     if (DO_SCREENSHOT) {
       await ensureHtml2Canvas();
       const target = document.querySelector('body > div.scroller > container > div') || document.body;
-      const base = await html2canvas(target, { scale: 2, useCORS: true, backgroundColor: null });
-
-      const out = document.createElement('canvas');
-      out.width = 1080; out.height = 1080;
-      const ctx = out.getContext('2d');
-      const rw = base.width, rh = base.height;
-      const sRatio = Math.min(1080 / rw, 1080 / rh);
-      const dw = Math.round(rw * sRatio);
-      const dh = Math.round(rh * sRatio);
-      const dx = Math.floor((1080 - dw) / 2);
-      const dy = Math.floor((1080 - dh) / 2);
-
-      ctx.fillStyle = 'white';
-      ctx.fillRect(0, 0, 1080, 1080);
-      ctx.drawImage(base, 0, 0, rw, rh, dx, dy, dw, dh);
-
-      const blob = await new Promise(r => out.toBlob(r, 'image/png'));
+      
+      // 🔎 Увеличиваем DOM перед скриншотом (как масштаб браузера)
+      const oldZoom = document.body.style.zoom;
+      document.body.style.zoom = "1.5"; // ← регулируй число (например 1.3 если слишком крупно)
+    
+      await new Promise(r => setTimeout(r, 200)); // ждём перерисовку
+    
+      // снимаем скрин
+      const base = await html2canvas(target, { 
+        scale: window.devicePixelRatio || 2, 
+        useCORS: true, 
+        backgroundColor: null 
+      });
+    
+      // возвращаем масштаб обратно
+      document.body.style.zoom = oldZoom || "";
+    
+      // сохраняем как есть (без вписывания в 1080х1080)
+      const blob = await new Promise(r => base.toBlob(r, 'image/png'));
       const fileId = await uploadToDrive(blob, `theater_${patchName || 'unknown'}_${Date.now()}.png`, TOKEN);
       await makePublic(fileId, TOKEN);
       publicUrl = `https://drive.google.com/uc?id=${fileId}`;
