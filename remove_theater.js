@@ -30,7 +30,7 @@
   const TOKEN = await getAccessToken();
   const SHEETS_ID =
     window.SHEETS_ID || '1XLo39UfRJWXESFTBSJKa4hPO0S7XOjKounKeb2QNus8';
-  const SHEET_NAME = 'Лист1';
+  const SHEET_NAME = 'Theater';
   const DO_SCREENSHOT = window.DO_SCREENSHOT !== false;
 
   function waitForElement(selector, cb) {
