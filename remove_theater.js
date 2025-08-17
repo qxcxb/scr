@@ -162,29 +162,30 @@
     if (DO_SCREENSHOT) {
       await ensureHtml2Canvas();
       const target = document.querySelector('body > div.scroller > container > div') || document.body;
-      
-      // 🔎 Увеличиваем DOM перед скриншотом (как масштаб браузера)
-      const oldZoom = document.body.style.zoom;
-      document.body.style.zoom = "1.5"; // ← регулируй число (например 1.3 если слишком крупно)
     
-      await new Promise(r => setTimeout(r, 200)); // ждём перерисовку
+      // 🔎 Увеличиваем DOM перед скриншотом
+      const oldZoom = document.body.style.zoom;
+      document.body.style.zoom = "2.0"; // ← 200%, можешь поставить 1.5 для 150%
+    
+      await new Promise(r => setTimeout(r, 300)); // ждём перерисовку
     
       // снимаем скрин
       const base = await html2canvas(target, { 
-        scale: window.devicePixelRatio || 2, 
-        useCORS: true, 
+        scale: window.devicePixelRatio || 2,
+        useCORS: true,
         backgroundColor: null 
       });
     
       // возвращаем масштаб обратно
       document.body.style.zoom = oldZoom || "";
     
-      // сохраняем как есть (без вписывания в 1080х1080)
+      // сохраняем
       const blob = await new Promise(r => base.toBlob(r, 'image/png'));
       const fileId = await uploadToDrive(blob, `theater_${patchName || 'unknown'}_${Date.now()}.png`, TOKEN);
       await makePublic(fileId, TOKEN);
       publicUrl = `https://drive.google.com/uc?id=${fileId}`;
     }
+
 
     if (patchName && publicUrl) {
       const row = await findRowByPatch(SHEETS_ID, 'Theater', patchName, TOKEN);
