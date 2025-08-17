@@ -1,20 +1,15 @@
-// Требуемые OAuth scopes: https://www.googleapis.com/auth/drive  https://www.googleapis.com/auth/spreadsheets
+// Требуемые OAuth scopes: https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/spreadsheets
 (async () => {
   // --- токен ---
   async function getAccessToken() {
     if (window.GOOGLE_TOKEN) return window.GOOGLE_TOKEN;
-    const id = window.GOOGLE_CLIENT_ID,
-          sec = window.GOOGLE_CLIENT_SECRET,
-          rt = window.GOOGLE_REFRESH_TOKEN;
+    const id = window.GOOGLE_CLIENT_ID, sec = window.GOOGLE_CLIENT_SECRET, rt = window.GOOGLE_REFRESH_TOKEN;
     if (!(id && sec && rt)) throw new Error('Нет access_token и нет refresh-кредов');
     const body = new URLSearchParams({
-      client_id: id, client_secret: sec,
-      refresh_token: rt, grant_type: 'refresh_token'
+      client_id: id, client_secret: sec, refresh_token: rt, grant_type: 'refresh_token'
     });
     const r = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body
     });
     if (!r.ok) throw new Error('Не удалось получить access_token');
     const j = await r.json();
@@ -23,10 +18,13 @@
   }
 
   const TOKEN = await getAccessToken();
-  const SHEETS_ID   = window.SHEETS_ID   || '1XLo39UfRJWXESFTBSJKa4hPO0S7XOjKounKeb2QNus8';
-  const SHEET_NAME  = window.SHEET_NAME  || 'Лист1';
+  const SHEETS_ID = window.SHEETS_ID || '1XLo39UfRJWXESFTBSJKa4hPO0S7XOjKounKeb2QNus8';
+  const SHEET_NAME = window.SHEET_NAME || 'Лист1';
   const DO_SCREENSHOT = window.DO_SCREENSHOT !== false;
-  const SCREEN_SCALE  = Number(window.SCREEN_SCALE || 1.5); // ← масштаб текста
+
+  // коэффициенты масштабирования
+  const ELEMENT_SCALE = 1.5; // масштаб картинок/блоков
+  const TEXT_SCALE = 1.2;    // мягкий масштаб текста
 
   function waitForElement(selector, cb) {
     const el = document.querySelector(selector);
@@ -40,10 +38,7 @@
 
   // ======== Чистка страницы Theater и формат даты ========
   function cleanTheaterPage() {
-    // Работа с датой формата YYYY/MM
-    const monthElem = document.querySelector(
-      'div.blessing_card_area > div > p:nth-child(2)'
-    );
+    const monthElem = document.querySelector('div.blessing_card_area > div > p:nth-child(2)');
     if (monthElem) {
       const t = monthElem.textContent.trim();
       const m = t.match(/^(\d{4})\/(\d{1,2})$/);
@@ -53,24 +48,15 @@
         const pad2 = n => (n < 10 ? '0' + n : '' + n);
         const nextM = mm === 12 ? 1 : mm + 1;
         const nextY = mm === 12 ? y + 1 : y;
-        monthElem.textContent =
-          `01.${pad2(mm)}.${y} — 01.${pad2(nextM)}.${nextY}`;
+        monthElem.textContent = `01.${pad2(mm)}.${y} — 01.${pad2(nextM)}.${nextY}`;
         monthElem.style.fontSize = '1.6em';
         monthElem.style.fontWeight = 'bold';
         monthElem.style.textAlign = 'center';
       }
     }
-
-    // ==== УДАЛЕНИЕ ЛИШНЕГО ====
     const selectors = [
-      'section.typ',
-      'p.avd.tip_3',
-      'h3',
-      'span.v_l',
-      'span.v_r',
-      'div.card_2.card_toggle',
-      'div.mon_desc',
-      'p.sch_2',
+      'section.typ','p.avd.tip_3','h3','span.v_l','span.v_r','div.card_2.card_toggle',
+      'div.mon_desc','p.sch_2',
       'body > div.scroller > container > div > div.blessing_card_area > div:nth-child(3)',
       'body > div.scroller > container > div > div.blessing_card_area > div:nth-child(4)',
       'body > div.scroller > container > div > div.blessing_card_area > div:nth-child(5)'
@@ -96,14 +82,14 @@
     const delim = `\r\n--${boundary}\r\n`;
     const closeDelim = `\r\n--${boundary}--`;
     const buf = new Uint8Array(await blob.arrayBuffer());
-    let bin = ''; for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+    let bin = '';
+    for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
     const base64 = btoa(bin);
-
-    const body = delim + 'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+    const body =
+      delim + 'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
       JSON.stringify(meta) +
       delim + 'Content-Type: image/png\r\nContent-Transfer-Encoding: base64\r\n\r\n' +
       base64 + closeDelim;
-
     const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': `multipart/related; boundary=${boundary}` },
@@ -128,7 +114,8 @@
     });
     if (!r.ok) throw new Error('Sheets read failed');
     const rows = (await r.json()).values || [];
-    for (let i = 0; i < rows.length; i++) if ((rows[i][0] || '').trim() === patch) return i + 1;
+    for (let i = 0; i < rows.length; i++)
+      if ((rows[i][0] || '').trim() === patch) return i + 1;
     return 0;
   }
 
@@ -150,86 +137,67 @@
     if (!r.ok) throw new Error('Sheets append failed');
   }
 
-  // ——— вспомогательное: увеличение шрифтов в клон-DOM ———
-  function bumpFontsInClone(doc, root, scale) {
-    try {
-      const win = doc.defaultView;
-      const all = root.querySelectorAll('*');
-      for (let i = 0; i < all.length; i++) {
-        const el = all[i];
-        const cs = win.getComputedStyle(el);
-
-        // font-size
-        const fs = parseFloat(cs.fontSize);
-        if (!Number.isNaN(fs) && cs.fontSize.endsWith('px')) {
-          el.style.fontSize = (fs * scale) + 'px';
-        }
-
-        // line-height (если в px)
-        const lh = cs.lineHeight;
-        if (lh && lh.endsWith && lh.endsWith('px')) {
-          const lhPx = parseFloat(lh);
-          if (!Number.isNaN(lhPx)) el.style.lineHeight = (lhPx * scale) + 'px';
-        }
-
-        // letter-spacing (если в px)
-        const ls = cs.letterSpacing;
-        if (ls && ls.endsWith && ls.endsWith('px')) {
-          const lsPx = parseFloat(ls);
-          if (!Number.isNaN(lsPx)) el.style.letterSpacing = (lsPx * scale) + 'px';
-        }
-      }
-    } catch(e) {
-      console.warn('bumpFontsInClone error:', e);
-    }
-  }
-
   waitForElement('body > div.scroller > container > div', async () => {
-    try {
-      cleanTheaterPage();
+    cleanTheaterPage();
+    const patchName = (document.querySelector('body > div.scroller > container > div > div.blessing_card_area > div > p:nth-child(1)')?.textContent || '').trim();
+    let publicUrl = '';
 
-      const targetSelector = 'body > div.scroller > container > div';
-      const target = document.querySelector(targetSelector) || document.body;
-
-      const patchName = (document.querySelector('body > div.scroller > container > div > div.blessing_card_area > div > p:nth-child(1)')?.textContent || '').trim() || 'unknown';
-
-      if (!DO_SCREENSHOT) return;
-
+    if (DO_SCREENSHOT) {
       await ensureHtml2Canvas();
+      const target = document.querySelector('body > div.scroller > container > div') || document.body;
 
-      // — Снимаем скрин, увеличив ТЕКСТ в клон-DOM —
       const base = await html2canvas(target, {
-        scale: window.devicePixelRatio || 2,
+        scale: 2,
         useCORS: true,
         backgroundColor: null,
         onclone: (doc) => {
-          const clonedTarget = doc.querySelector(targetSelector) || doc.body;
-          bumpFontsInClone(doc, clonedTarget, SCREEN_SCALE); // ← вот тут текст реально становится крупнее
+          const cloneTarget = doc.querySelector('body > div.scroller > container > div');
+          if (cloneTarget) {
+            cloneTarget.style.transformOrigin = "0 0";
+            cloneTarget.style.transform = `scale(${ELEMENT_SCALE})`;
+          }
+          // подгон текста мягко
+          doc.querySelectorAll('*').forEach(el => {
+            const cs = window.getComputedStyle(el);
+            if (cs.fontSize.endsWith('px')) {
+              const px = parseFloat(cs.fontSize);
+              el.style.fontSize = (px * TEXT_SCALE) + "px";
+            }
+          });
         }
       });
 
-      // Сохраняем PNG
-      const blob = await new Promise(r => base.toBlob(r, 'image/png'));
-      const fileId = await uploadToDrive(blob, `theater_${patchName}_${Date.now()}.png`, TOKEN);
-      await makePublic(fileId, TOKEN);
-      const publicUrl = `https://drive.google.com/uc?id=${fileId}`;
+      // приводим в квадрат 1080x1080
+      const out = document.createElement('canvas');
+      out.width = 1080;
+      out.height = 1080;
+      const ctx = out.getContext('2d');
+      const rw = base.width, rh = base.height;
+      const sRatio = Math.min(1080 / rw, 1080 / rh);
+      const dw = Math.round(rw * sRatio);
+      const dh = Math.round(rh * sRatio);
+      const dx = Math.floor((1080 - dw) / 2);
+      const dy = Math.floor((1080 - dh) / 2);
+      ctx.fillStyle = 'white';
+      ctx.fillRect(0, 0, 1080, 1080);
+      ctx.drawImage(base, 0, 0, rw, rh, dx, dy, dw, dh);
 
-      // — Запись в Google Sheets —
+      const blob = await new Promise(r => out.toBlob(r, 'image/png'));
+      const fileId = await uploadToDrive(blob, `theater_${patchName || 'unknown'}_${Date.now()}.png`, TOKEN);
+      await makePublic(fileId, TOKEN);
+      publicUrl = `https://drive.google.com/uc?id=${fileId}`;
+    }
+
+    if (patchName && publicUrl) {
       const row = await findRowByPatch(SHEETS_ID, SHEET_NAME, patchName, TOKEN);
       const ts = new Date().toISOString();
+      const formula = `=IMAGE("${publicUrl}")`;
 
       if (row > 0) {
-        // Обновляем B (URL) и C (timestamp)
-        await updateCell(SHEETS_ID, `${SHEET_NAME}!B${row}:C${row}`, [[publicUrl, ts]], TOKEN);
+        await updateCell(SHEETS_ID, `${SHEET_NAME}!B${row}:C${row}`, [[formula, ts]], TOKEN);
       } else {
-        // Добавляем новую строку: A=patch, B=URL, C=time
-        await appendRow(SHEETS_ID, `${SHEET_NAME}!A:C`, [[patchName, publicUrl, ts]], TOKEN);
+        await appendRow(SHEETS_ID, `${SHEET_NAME}!A:C`, [[patchName, formula, ts]], TOKEN);
       }
-
-      // Если хочешь видеть ссылку в консоли
-      console.log('Public screenshot URL:', publicUrl);
-    } catch (e) {
-      console.error('Screenshot pipeline failed:', e);
     }
   });
 })();
